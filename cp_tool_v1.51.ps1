@@ -1,8 +1,11 @@
-﻿$ErrorActionPreference = "stop"
+$ErrorActionPreference = "stop"
 Set-PSDebug -Strict
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName System.Windows.Forms
 
+###########################################################
+#ここから下、GUI部分
+###########################################################
 [xml]$xaml = @'
 <Window 
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -12,7 +15,7 @@ Add-Type -AssemblyName System.Windows.Forms
     <Grid Margin="0,0,14,8">
 
         <Label    x:Name="label_origin" Content="コピー元フォルダの選択" HorizontalAlignment="Left" Height="25" Margin="25,10,0,0" VerticalAlignment="Top" Width="160" Background="{x:Null}" RenderTransformOrigin="0.5,-0.249" FontSize="10"/>
-        <TextBox  x:Name="textBox_toCopy_origin" HorizontalAlignment="Left" Height="20" Margin="30,35,0,0"  Text="フォルダを選択してください" VerticalAlignment="Top" Width="210" Background="#FFECECEC" FontSize="10"/>
+        <TextBox  x:Name="textBox_origin" HorizontalAlignment="Left" Height="20" Margin="30,35,0,0"  Text="フォルダを選択してください" VerticalAlignment="Top" Width="210" Background="#FFECECEC" FontSize="10"/>
         <Button   x:Name="button_ref_origin" Content="参照" HorizontalAlignment="Left" Height="20" Margin="255,35,0,0" VerticalAlignment="Top" Width="55" RenderTransformOrigin="0.5,-0.498"/>
 
 
@@ -39,13 +42,33 @@ Add-Type -AssemblyName System.Windows.Forms
 $reader = New-Object System.Xml.XmlNodeReader $xaml
 $frm = [System.Windows.Markup.XamlReader]::Load($reader)
 
-#日付の取得
-$todays = Get-Date -format "yyyyMM"
-
+###########################################################
+#ここから下、設定ファイルの作成
+###########################################################
+#スクリプトがあるフォルダに設定ファイルが無ければ設定ファイルを作成する
+$configpath = "$PSScriptRoot\copyToolConfig.xml"
+if(!(Test-Path $configpath -PathType leaf)){
+     $strXml = @"
+<?xml version="1.0" encoding="utf-8"?>
+<Configuration>
+	<originPath>
+        <path></path>
+    </originPath>
+    <toCopyPath>
+        <path></path>
+    </toCopyPath>
+</Configuration>
+"@
+     $xmlDoc = [xml]$strXml
+     $xmlDoc.Save($configpath)
+     Set-ItemProperty -path $configpath -name Attributes -value "Hidden,Readonly"
+}
 
 ###########################################################
 #ここから下、年数の設定
 ###########################################################
+#日付の取得
+$todays = Get-Date -format "yyyyMM"
 #年数の取得（今年から前後50年分くらい（適当））
 $years = @();
 $thisYear = get-date -Format "yyyy"
@@ -90,12 +113,17 @@ for ($i = 0; $i -lt $months.Count; $i++) {
 ###########################################################
 #参照ボタンとフォルダ選択メソッドの紐づけ
 $button_ref = $frm.FindName("button_ref_origin")
-$button_ref.Add_Click({selectFolder($textBox_toCopy_origin)})
-$textBox_toCopy_origin = $frm.FindName("textBox_toCopy_origin")
+$button_ref.Add_Click({selectFolder($textBox_origin)})
+$textBox_origin = $frm.FindName("textBox_origin")
 
 $button_ref_toCopy = $frm.FindName("button_ref_toCopy")
 $button_ref_toCopy.Add_Click({selectFolder($textBox_toCopy)})
 $textBox_toCopy = $frm.FindName("textBox_toCopy")
+
+#設定ファイルを読み込み指定されたフォルダパスがあればその値を設定
+if($xmlDoc -eq "") {
+
+}
 function selectFolder($btn_ref_name) {
 
     $FolderBrowser = New-Object System.Windows.Forms.FolderBrowserDialog -Property @{ 
@@ -123,7 +151,7 @@ function copyRun {
     $dayStr = $comboBox_years.Text + $comboBox_month.text
     [string]$msg = "";
     #ディレクトリの取得
-    $targetPath = $frm.FindName("textBox_toCopy_origin")
+    $targetPath = $frm.FindName("textBox_origin")
     $targetFolder = Get-ChildItem $targetPath
 
     #対象ファイルに対してアカウントの判定処理呼び出し
@@ -153,4 +181,3 @@ function copyRun {
 
 #ダイアログの表示
 $frm.ShowDialog()
-
