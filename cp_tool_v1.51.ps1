@@ -15,7 +15,7 @@ Add-Type -AssemblyName System.Windows.Forms
     <Grid Margin="0,0,14,8">
 
         <Label    x:Name="label_origin" Content="コピー元フォルダの選択" HorizontalAlignment="Left" Height="25" Margin="25,10,0,0" VerticalAlignment="Top" Width="160" Background="{x:Null}" RenderTransformOrigin="0.5,-0.249" FontSize="10"/>
-        <TextBox  x:Name="textBox_origin" HorizontalAlignment="Left" Height="20" Margin="30,35,0,0"  Text="フォルダを選択してください" VerticalAlignment="Top" Width="210" Background="#FFECECEC" FontSize="10"/>
+        <TextBox  x:Name="textBox_origin" HorizontalAlignment="Left" Height="20" Margin="30,35,0,0"  Text="" VerticalAlignment="Top" Width="210" Background="#FFECECEC" FontSize="10"/>
         <Button   x:Name="button_ref_origin" Content="参照" HorizontalAlignment="Left" Height="20" Margin="255,35,0,0" VerticalAlignment="Top" Width="55" RenderTransformOrigin="0.5,-0.498"/>
 
 
@@ -29,7 +29,7 @@ Add-Type -AssemblyName System.Windows.Forms
 
 
         <Label    x:Name="label_toCopy" Content="コピー先フォルダの選択" HorizontalAlignment="Left" Height="25" Margin="25,120,0,0" VerticalAlignment="Top" Width="160" Background="{x:Null}" RenderTransformOrigin="0.5,-0.249" FontSize="10"/>
-        <TextBox  x:Name="textBox_toCopy" HorizontalAlignment="Left" Height="20" Margin="30,145,0,0"  Text="フォルダを選択してください" VerticalAlignment="Top" Width="210" Background="#FFECECEC" FontSize="10"/>
+        <TextBox  x:Name="textBox_toCopy" HorizontalAlignment="Left" Height="20" Margin="30,145,0,0"  Text="" VerticalAlignment="Top" Width="210" Background="#FFECECEC" FontSize="10"/>
         <Button   x:Name="button_ref_toCopy" Content="参照" HorizontalAlignment="Left" Height="20" Margin="255,145,0,0" VerticalAlignment="Top" Width="55" RenderTransformOrigin="0.5,-0.498"/>
 
 
@@ -45,24 +45,17 @@ $frm = [System.Windows.Markup.XamlReader]::Load($reader)
 ###########################################################
 #ここから下、設定ファイルの作成
 ###########################################################
-#スクリプトがあるフォルダに設定ファイルが無ければ設定ファイルを作成する
-$configpath = "$PSScriptRoot\copyToolConfig.xml"
+#json設定ファイルが無ければ設定ファイルを作成する
+$configpath = "$PSScriptRoot\config.json"
+
 if(!(Test-Path $configpath -PathType leaf)){
-     $strXml = @"
-<?xml version="1.0" encoding="utf-8"?>
-<Configuration>
-	<originPath>
-        <path></path>
-    </originPath>
-    <toCopyPath>
-        <path></path>
-    </toCopyPath>
-</Configuration>
-"@
-     $xmlDoc = [xml]$strXml
-     $xmlDoc.Save($configpath)
-     Set-ItemProperty -path $configpath -name Attributes -value "Hidden,Readonly"
+    
+    $json = @{originPath="フォルダを選択してください"; toCopyPath="フォルダを選択してください"}
+    ConvertTo-Json $json | Out-File $configpath -Encoding utf8
 }
+
+#jsonファイルを読み込んで変数へ格納
+$configJson = ConvertFrom-Json -InputObject (Get-Content $configpath -Raw)
 
 ###########################################################
 #ここから下、年数の設定
@@ -120,23 +113,37 @@ $button_ref_toCopy = $frm.FindName("button_ref_toCopy")
 $button_ref_toCopy.Add_Click({selectFolder($textBox_toCopy)})
 $textBox_toCopy = $frm.FindName("textBox_toCopy")
 
-#設定ファイルを読み込み指定されたフォルダパスがあればその値を設定
-if($xmlDoc -eq "") {
-
+#設定ファイルから前回指定されたフォルダパスがあればその値を設定
+if(Test-Path $configpath -PathType leaf){
+    $textBox_origin.text = $configJson.originPath
+    $textBox_toCopy.text = $configJson.toCopyPath
 }
+
 function selectFolder($btn_ref_name) {
 
     $FolderBrowser = New-Object System.Windows.Forms.FolderBrowserDialog -Property @{ 
         RootFolder = "Desktop"
-        Description = 'フォルダを選択してください'
+        Description = "フォルダを選択してください"
     }
-
+    Write-Host $btn_ref_name.object
     # フォルダ選択の有無を判定
     if($FolderBrowser.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK){
         $btn_ref_name.Text = $FolderBrowser.SelectedPath
     }
+    Write-Host $btn_ref_name
+    Write-Host $textBox_origin.Text
+
+#    if($btn_ref_name -eq ) { 
+#
+#    } elseif($btn_ref_name -eq ) {
+#
+#    }
 
 }
+
+$configJson.toCopyPath = $FolderBrowser.SelectedPath
+$configJson.toCopyPath = $FolderBrowser.SelectedPath
+ConvertTo-Json $configJson | Out-File $configpath -Encoding utf8
 
 ###########################################################
 #ここから下、OKボタンの設定
@@ -148,6 +155,7 @@ $button_OK.Add_Click({copyRun})
 $label_result = $frm.FindName("label_result")
 $count = 0;
 function copyRun {
+
     $dayStr = $comboBox_years.Text + $comboBox_month.text
     [string]$msg = "";
     #ディレクトリの取得
@@ -160,7 +168,7 @@ function copyRun {
     #コピー先のフォルダを確認し、あれば開く
     if(Test-Path $textBox_toCopy.Text ) {
         $copyFolder = $textBox_toCopy.Text
-        Invoke-Item　-Path $copyFolder
+        Invoke-Item -Path $copyFolder
         #Write-Host($copyFolder);
     }else {
         #Write-Host("コピー先のフォルダがありません。");
